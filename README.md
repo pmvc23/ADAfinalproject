@@ -1,4 +1,5 @@
-# ADA Final Project – Evaluating Labor Induction and Cesarean Delivery in Rural Ghana
+# ADA Final Project
+# Evaluating Labor Induction and Cesarean Delivery in Rural Ghana
 
 ## Project Description
 
@@ -34,6 +35,9 @@ The code is commented throughout to explain each step, following the “coding t
 To run the code, you will need the following R packages:
 
 - `tidyverse`
+- `knitr`
+- `gtsummary`
+- `kableExtra`
 - `readxl`
 - `broom`
 - `car`
