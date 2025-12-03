@@ -2,7 +2,7 @@
 
 ## Project Description
 
-This project is my final assignment for Applied Data Analysis (ADA).  
+This project is my final assignment for Advanced Data Analysis (ADA).  
 The goal is to evaluate whether induction of labor at term is associated with cesarean section (CS) among low-risk pregnancies in a rural Ghanaian hospital.
 
 Using 2020 maternity records, I conducted a retrospective cross-sectional analysis of term singleton deliveries. The primary research question is whether induction of labor is associated with the odds of CS after adjusting for maternal age, gestational age at delivery, gravidity, and history of previous cesarean section. A secondary objective was to assess whether maternal age modifies the association between induction and CS (induction × age interaction).
