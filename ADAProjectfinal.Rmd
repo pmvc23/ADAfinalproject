@@ -1,0 +1,304 @@
+---
+title: "Evaluating labor induction and cesarean delivery in rural Ghana"
+author: "Peter McCarthy"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(car)                 # VIF
+library(ResourceSelection)   # Hosmer–Lemeshow
+library(DiagrammeR)          # Flow diagram
+
+options(dplyr.summarise.inform = FALSE)
+
+```
+
+```{r}
+# Read in the raw dataset (adjust path if needed)
+
+mat_raw <- read_excel("ADA folder/matdata.xlsx")
+
+# Recode variables and create analysis-ready dataset
+
+mat <- mat_raw %>%
+mutate(
+# Delivery mode: 1 = Vaginal, 2 = CS
+mode = factor(mode,
+levels = c(1, 2),
+labels = c("Vaginal", "CS")),
+mode_bin = ifelse(mode == "CS", 1, 0),
+
+# Induction of labor: 1 = induced, 2 = not induced, 3 = not stated (set to NA)
+induction = case_when(
+  induction %in% c(1, "1") ~ "Induced",
+  induction %in% c(2, "2") ~ "Not induced",
+  induction %in% c(3, "3") ~ NA_character_,  # "not stated" treated as missing
+  TRUE ~ NA_character_
+),
+induction = factor(induction, levels = c("Not induced", "Induced")),
+
+# Previous CS: 1 = Yes, 2 = No
+previousCS = case_when(
+  previousCS %in% c(1, "1") ~ "Yes",
+  previousCS %in% c(2, "2") ~ "No",
+  TRUE ~ NA_character_
+),
+previousCS = factor(previousCS, levels = c("No", "Yes")),
+
+# Sex of baby: 1 = Male, 2 = Female
+sex = case_when(
+  sex %in% c(1, "1") ~ "Male",
+  sex %in% c(2, "2") ~ "Female",
+  TRUE ~ NA_character_
+),
+sex = factor(sex, levels = c("Male", "Female")),
+
+# Presentation: 1 = Cephalic, 2 = Breech
+presentation = case_when(
+  presentation %in% c(1, "1") ~ "Cephalic",
+  presentation %in% c(2, "2") ~ "Breech",
+  TRUE ~ NA_character_
+),
+presentation = factor(presentation, levels = c("Cephalic", "Breech")),
+
+# Numeric variables
+age       = as.numeric(age),
+GA        = as.numeric(GA),
+BW        = as.numeric(BW),
+hb        = as.numeric(hb),
+gravidity = as.numeric(gravidity),
+
+# Reason for CS (categorical)
+otherReason4CS = factor(otherReason4CS),
+
+# Occupation & Education as factors
+occupation = factor(occupation),
+education  = factor(education)
+
+)
+
+glimpse(mat)
+
+```
+```{r}
+table(mat$mode,         useNA = "ifany")
+table(mat$induction,    useNA = "ifany")
+table(mat$previousCS,   useNA = "ifany")
+table(mat$presentation, useNA = "ifany")
+table(mat$sex,          useNA = "ifany")
+table(mat$mode_bin,     useNA = "ifany")
+
+```
+```{r}
+# 0) All records
+
+n_start <- nrow(mat)
+
+# 1) Non-missing mode (vaginal vs CS)
+
+mat_step1 <- mat %>%
+filter(!is.na(mode_bin))
+n_step1 <- nrow(mat_step1)
+
+# 2) Non-missing induction (excludes "not stated" coded as NA)
+
+mat_step2 <- mat_step1 %>%
+filter(!is.na(induction))
+n_step2 <- nrow(mat_step2)
+
+# 3) Non-missing previous CS
+
+mat_step3 <- mat_step2 %>%
+filter(!is.na(previousCS))
+n_step3 <- nrow(mat_step3)
+
+# 4) Non-missing key covariates (age, GA, gravidity)
+
+mat_cc <- mat_step3 %>%
+filter(
+!is.na(age),
+!is.na(GA),
+!is.na(gravidity)
+)
+n_final <- nrow(mat_cc)
+
+# Print sample sizes at each step
+
+n_start; n_step1; n_step2; n_step3; n_final
+
+# Flow table for reporting (final analytic sample = complete cases)
+
+flow_table <- tibble::tibble(
+step_order = 1:5,
+step_label = c(
+"All records in matdata.xlsx",
+"Non-missing mode (Vaginal/CS)",
+"Non-missing induction (exclude 'not stated')",
+"Non-missing previous CS",
+"Non-missing age, GA, gravidity (final analytic sample)"
+),
+n = c(
+n_start,
+n_step1,
+n_step2,
+n_step3,
+n_final
+)
+)
+
+flow_table
+
+# Summary of key variables in analytic dataset
+
+summary(mat_cc[, c("mode", "mode_bin", "induction", "age", "GA", "gravidity", "previousCS")])
+
+```
+```{r}
+# Outcome: mode_bin (1 = CS, 0 = vaginal)
+
+# Exposure: induction
+
+# Covariates: age, GA, gravidity, previousCS
+
+# Interaction: induction * age (secondary objective)
+
+fit_cc <- glm(
+mode_bin ~ induction * age + GA + gravidity + previousCS,
+data   = mat_cc,
+family = binomial
+)
+
+summary(fit_cc)
+
+```
+```{r}
+# ORs and 95% CIs
+
+OR_table <- exp(cbind(
+OR   = coef(fit_cc),
+confint(fit_cc)
+))
+
+OR_table
+
+```
+```{r}
+# Multicollinearity (VIF)
+
+vif(fit_cc)
+
+# Hosmer–Lemeshow goodness-of-fit test (g = 10 groups)
+
+hoslem.test(mat_cc$mode_bin, fitted(fit_cc), g = 10)
+
+# Prepare data for checking ranges of continuous variables
+
+bt_data <- mat_cc %>%
+select(mode_bin, age, GA, gravidity) %>%
+na.omit()
+
+summary(bt_data)
+
+# Check for problematic values for potential Box–Tidwell tests
+
+sapply(bt_data[, c("age", "GA", "gravidity")], function(x) {
+c(
+min      = min(x),
+any_leq0 = any(x <= 0),
+any_na   = any(is.na(x)),
+any_inf  = any(is.infinite(x))
+)
+})
+
+```
+```{r}
+# Categorize age, GA, and gravidity for approximate linearity checks
+
+mat_cc_cat <- mat_cc %>%
+mutate(
+age_cat = cut(
+age,
+breaks = quantile(age, probs = c(0, .25, .5, .75, 1), na.rm = TRUE),
+include.lowest = TRUE
+),
+GA_cat = cut(
+GA,
+breaks = quantile(GA, probs = c(0, .25, .5, .75, 1), na.rm = TRUE),
+include.lowest = TRUE
+),
+grav_cat = cut(
+gravidity,
+breaks = c(1, 2, 3, 4, Inf),
+labels = c("1", "2", "3", "4+"),
+include.lowest = TRUE
+)
+)
+
+# Proportion CS within each category
+
+prop.table(table(mat_cc_cat$age_cat,  mat_cc_cat$mode_bin), 1)
+prop.table(table(mat_cc_cat$GA_cat,   mat_cc_cat$mode_bin), 1)
+prop.table(table(mat_cc_cat$grav_cat, mat_cc_cat$mode_bin), 1)
+
+```
+```{r}
+DiagrammeR::grViz(sprintf("
+digraph flow {
+graph [rankdir = TB, fontsize = 14,
+label = 'Sample Size Flow Diagram\n\nThis chart shows how the analytic sample was reduced to 254 complete cases.', labelloc = t]
+
+node [shape = rectangle, style = filled,
+fillcolor = \"#f5f5f5\", fontname = \"Garamond\"]
+edge [fontname = \"Garamond\", fontsize = 10]
+
+# Nodes
+
+n0  [label = 'All records\n(n = %d)']
+
+d1  [label = 'Mode recorded?', shape = rectangle,
+fillcolor = \"#e0e0e0\"]
+n1  [label = 'Non-missing mode\n(n = %d)']
+x1  [label = 'Excluded\n(missing mode)', fillcolor = \"#ffebee\"]
+
+d2  [label = 'Induction recorded?', shape = rectangle,
+fillcolor = \"#e0e0e0\"]
+n2  [label = 'Non-missing induction\n(n = %d)']
+x2  [label = 'Excluded\n(induction not stated/NA)', fillcolor = \"#ffebee\"]
+
+d3  [label = 'Previous CS recorded?', shape = rectangle,
+fillcolor = \"#e0e0e0\"]
+n3  [label = 'Non-missing previous CS\n(n = %d)']
+x3  [label = 'Excluded\n(missing previous CS)', fillcolor = \"#ffebee\"]
+
+d4  [label = 'Age, GA, gravidity complete?', shape = rectangle,
+fillcolor = \"#e0e0e0\"]
+n4  [label = 'Final analytic sample\nComplete covariates\n(n = %d)']
+x4  [label = 'Excluded\n(incomplete covariates)', fillcolor = \"#ffebee\"]
+
+# Edges
+
+n0 -> d1
+
+d1 -> n1 [label = 'Yes']
+d1 -> x1 [label = 'No']
+
+n1 -> d2
+d2 -> n2 [label = 'Yes']
+d2 -> x2 [label = 'No']
+
+n2 -> d3
+d3 -> n3 [label = 'Yes']
+d3 -> x3 [label = 'No']
+
+n3 -> d4
+d4 -> n4 [label = 'Yes']
+d4 -> x4 [label = 'No']
+}
+", n_start, n_step1, n_step2, n_step3, n_final))
+
+```
+
+
