@@ -16,7 +16,7 @@ The final logistic regression model includes induction, age, gestational age, gr
 
 **File:** `ADAprojectfinal.Rmd`  
 This R Markdown file contains the full, annotated analysis pipeline:
-
+All analyses were done using R studio version 2025.09.1+401 
 - Data import from `matdata.xlsx`
 - Variable recoding (mode of delivery, induction, previous CS, presentation, sex, age, GA, gravidity, etc.)
 - Construction of the complete-case analytic sample (n ≈ 254)
