@@ -17,7 +17,7 @@ options(dplyr.summarise.inform = FALSE)
 ```
 
 ```{r}
-# Read in the raw dataset (adjust path if needed)
+# Read in the raw dataset 
 
 mat_raw <- read_excel("ADA folder/matdata.xlsx")
 
