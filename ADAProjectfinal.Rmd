@@ -6,6 +6,10 @@ output: html_document
 ---
 ```{r}
 library(tidyverse)
+library(dpyr)
+library(broom)
+library(kableExtra)
+library(knitr)
 library(gtsummary)
 library(readxl)
 library(broom)
@@ -94,6 +98,7 @@ table(mat$mode_bin,     useNA = "ifany")
 
 ```
 ```{r}
+#setting up my flow table
 # 0) All records
 
 n_start <- nrow(mat)
@@ -158,6 +163,7 @@ summary(mat_cc[, c("mode", "mode_bin", "induction", "age", "GA", "gravidity", "p
 
 ```
 ```{r}
+#setting up my glm
 # Outcome: mode_bin (1 = CS, 0 = vaginal)
 
 # Exposure: induction
@@ -246,6 +252,7 @@ prop.table(table(mat_cc_cat$grav_cat, mat_cc_cat$mode_bin), 1)
 
 ```
 ```{r}
+#creating a flow diagram for my case selection analysis
 DiagrammeR::grViz(sprintf("
 digraph flow {
 graph [rankdir = TB, fontsize = 14,
@@ -302,8 +309,7 @@ d4 -> x4 [label = 'No']
 
 ```
 ```{r}
-library(gtsummary)
-
+# generating my table 1 for my analysis
 table1_gt <- mat_cc %>%
   select(age, GA, gravidity, induction, previousCS, sex, presentation) %>%
   tbl_summary(
@@ -321,11 +327,7 @@ table1_gt
 ```
 
 ```{r}
-library(knitr)
-library(kableExtra)
-library(dplyr)
-
-### --- VIF TABLE ---
+# Generating publication ready VIF tables
 vif_table <- vif(fit_cc) %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Variable") %>%
@@ -334,7 +336,7 @@ vif_table <- vif(fit_cc) %>%
 kable(vif_table, caption = "Variance Inflation Factors (VIF) for Regression Predictors") %>%
   kable_styling(full_width = FALSE)
 
-### --- HOSMER–LEMESHOW TABLE ---
+# HOSMER–LEMESHOW TABLE 
 hl <- hoslem.test(mat_cc$mode_bin, fitted(fit_cc), g = 10)
 
 hl_table <- data.frame(
@@ -347,7 +349,7 @@ hl_table <- data.frame(
 kable(hl_table, caption = "Hosmer–Lemeshow Goodness-of-Fit Test") %>%
   kable_styling(full_width = FALSE)
 
-### --- SUMMARY TABLE FOR CONTINUOUS VARIABLES ---
+# SUMMARY TABLE FOR CONTINUOUS VARIABLES
 summary_table <- mat_cc %>%
   summarise(
     min_age = min(age), q1_age = quantile(age, .25), median_age = median(age),
@@ -367,7 +369,7 @@ summary_table <- mat_cc %>%
 kable(summary_table, caption = "Summary Statistics for Continuous Covariates") %>%
   kable_styling(full_width = FALSE)
 
-### --- LINEARITY (BOX–TIDWELL-LIKE) TABLE ---
+# LINEARITY (BOX–TIDWELL-LIKE) TABLE 
 bt_data <- mat_cc %>%
   select(age, GA, gravidity)
 
@@ -391,10 +393,6 @@ kable(linearity_table, caption = "Linearity Diagnostics for Continuous Predictor
 
 ```
 ```{r}
-library(dplyr)
-library(knitr)
-library(kableExtra)
-library(broom)
 
 apa_OR <- exp(cbind(
   OR = coef(fit_cc),
